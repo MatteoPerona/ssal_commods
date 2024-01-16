@@ -125,6 +125,8 @@ mod ssal_commods {
         OnlyBuyerCanFinalize,
         /// Returned if a caller attempts to finalize a contract before its finality block
         CannotFinalizeBeforeFinalityBlock,
+        /// Returned if caller tries to finalize a contract that has alread been finalzied 
+        ContractAlreadyFinalized,
     }
 
     impl SsalCommods {
@@ -524,6 +526,10 @@ mod ssal_commods {
                 Some(p) => p,
                 None => return Err(Error::ContractNotFound)
             };
+            // Check that it has not already been finalized
+            if self.is_finalized(id).unwrap() == true {
+                return Err(Error::ContractAlreadyFinalized);
+            }
             // Check that current block >= to the finality block of the contract
             if self.finality_block.get(id).unwrap() >= self.env().block_number() {
                 return Err(Error::CannotFinalizeBeforeFinalityBlock)
@@ -569,20 +575,118 @@ mod ssal_commods {
         fn default_works() {
             let ssal = SsalCommods::new(100_000);
             assert_eq!(ssal.get_contract_count(), 0);
+            assert_eq!(ssal.total_supply(), 100_000);
         }
 
         /// We test a simple use case of our contract.
         #[ink::test]
-        fn it_works() {
+        fn create_contract_works() {
             let mut ssal = SsalCommods::new(100_000);
-            assert!(
-                ssal.create_contract(10, 10000, 10, 20).is_err(), 
-                "could not create contract"
+
+            let accounts =
+                ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+
+            // Alice owns all the tokens on contract instantiation
+            assert_eq!(ssal.balance_of(accounts.alice), 100_000);
+            // Bob does not owns tokens
+            assert_eq!(ssal.balance_of(accounts.bob), 0);
+
+            // Test correct input.
+            assert_eq!(ssal.create_contract(10, 10_000, 10, 20), Ok(()));
+            assert_eq!(ssal.get_contract_count(), 1);
+            assert_eq!(ssal.get_seller(0), Some(accounts.alice));
+            assert_eq!(ssal.get_buyer(0), None);
+            assert_eq!(ssal.get_finality_block(0), Some(20));
+            assert_eq!(ssal.get_price(0), Some(10));
+            assert_eq!(ssal.get_total(0), Some(10_000));
+            assert_eq!(ssal.get_volume(0), Some(10));
+
+            // Test faulty input.
+            // Advance block number by 5
+            for _ in 1..5{
+                ink::env::test::advance_block::<ink::env::DefaultEnvironment>();
+            }
+            assert_eq!(
+                ssal.create_contract(10, 10_000, 10, 1), 
+                Err(Error::InvalidBlockNumber)
             );
             assert_eq!(ssal.get_contract_count(), 1);
         }
 
-        // TOKEN TESTS
+        /// We test a simple use case of our contract.
+        #[ink::test]
+        fn buy_contract_works() {
+            let mut ssal = SsalCommods::new(100_000);
+
+            let accounts =
+                ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+
+            // Alice owns all the tokens on contract instantiation
+            assert_eq!(ssal.balance_of(accounts.alice), 100_000);
+            // Bob does not owns tokens
+            assert_eq!(ssal.balance_of(accounts.bob), 0);
+
+            assert_eq!(ssal.create_contract(10, 10_000, 10, 20), Ok(()));
+
+            // Transfer funds to bob so he can purchase the contract.
+            // Make sure bob has 0 cash by default.
+            assert_eq!(ssal.balance_of(accounts.bob), 0);
+            // Alice transfers 10 tokens to Bob.
+            assert_eq!(ssal.transfer(accounts.bob, 10_000), Ok(()));
+            // Bob owns 10 tokens.
+            assert_eq!(ssal.balance_of(accounts.bob), 10_000);
+            
+            // Try to buy in correct case 
+            assert_eq!(ssal.buy_contract(0), Ok(()));
+            // Try to buy the contract that has just been bought
+            assert_eq!(ssal.buy_contract(0), Err(Error::ContractAlreadyBought));
+            // Try to buy a contract that does not exist
+            assert_eq!(ssal.buy_contract(1), Err(Error::ContractNotFound));
+            // Try to buy variations of contracts that cost too much
+            assert_eq!(ssal.create_contract(100_000, 100_000, 10, 20), Ok(()));
+            assert_eq!(ssal.create_contract(100_000, 0, 10, 20), Ok(()));
+            assert_eq!(ssal.create_contract(0, 100_000, 10, 20), Ok(()));
+            assert_eq!(ssal.buy_contract(1), Err(Error::InsufficientBalance));
+            assert_eq!(ssal.buy_contract(2), Err(Error::InsufficientBalance));
+            assert_eq!(ssal.buy_contract(3), Err(Error::InsufficientBalance));
+        }
+
+        #[ink::test]
+        fn finalize_works() {
+            let mut ssal = SsalCommods::new(100_000);
+
+            let accounts =
+                ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+
+            // Alice owns all the tokens on contract instantiation
+            assert_eq!(ssal.balance_of(accounts.alice), 100_000);
+
+            assert_eq!(ssal.finalize(0), Err(Error::ContractNotFound));
+
+            // Create new contract and buy
+            assert_eq!(ssal.create_contract(10, 10_000, 10, 1), Ok(()));
+            assert_eq!(ssal.buy_contract(0), Ok(()));
+            
+            // Try finalizing at finality block 
+            ink::env::test::advance_block::<ink::env::DefaultEnvironment>();
+            assert_eq!(ssal.finalize(0), Err(Error::CannotFinalizeBeforeFinalityBlock));
+
+            // Try finalizing after finality block 
+            ink::env::test::advance_block::<ink::env::DefaultEnvironment>();
+            assert_eq!(ssal.finalize(0), Ok(()));
+
+            // Try finalizing again on the same contract 
+            assert_eq!(ssal.finalize(0), Err(Error::ContractAlreadyFinalized));
+
+            // Try finalizing contract after finality block that has not been bought
+            assert_eq!(ssal.create_contract(10, 10_000, 10, 3), Ok(()));
+            for _ in 1..5 {
+                ink::env::test::advance_block::<ink::env::DefaultEnvironment>();
+            }
+            assert_eq!(ssal.finalize(1), Err(Error::ContractNotPurchased));
+            
+        }
+
     }
 
 
@@ -593,66 +697,141 @@ mod ssal_commods {
     /// - Are running a Substrate node which contains `pallet-contracts` in the background
     #[cfg(all(test, feature = "e2e-tests"))]
     mod e2e_tests {
-        /// Imports all the definitions from the outer scope so we can use them here.
         use super::*;
-
-        /// A helper function used for calling contract messages.
         use ink_e2e::build_message;
-
-        /// The End-to-End test `Result` type.
         type E2EResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
         /// We test that we can upload and instantiate the contract using its default constructor.
         #[ink_e2e::test]
-        async fn default_works(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
-            // Given
-            let constructor = SsalCommodsRef::default();
-
-            // When
-            let contract_account_id = client
-                .instantiate("SsalCommods", &ink_e2e::alice(), constructor, 0, None)
+        async fn buy_and_finalize(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
+            // given
+            let total_supply = 1_000_000_000;
+            let constructor = SsalCommodsRef::new(total_supply);
+            let contract_acc_id = client
+                .instantiate("ssal_commods", &ink_e2e::alice(), constructor, 0, None)
                 .await
                 .expect("instantiate failed")
                 .account_id;
 
-            // Then
-            let get = build_message::<SsalCommodsRef>(contract_account_id.clone())
-                .call(|SsalCommods| SsalCommods.get());
-            let get_result = client.call_dry_run(&ink_e2e::alice(), &get, 0, None).await;
-            assert!(matches!(get_result.return_value(), false));
+            // when
+            let total_supply_msg = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.total_supply());
+            let total_supply_res = client
+                .call_dry_run(&ink_e2e::bob(), &total_supply_msg, 0, None)
+                .await;
 
-            Ok(())
-        }
 
-        /// We test that we can read and write a value from the on-chain contract contract.
-        #[ink_e2e::test]
-        async fn it_works(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
-            // Given
-            let constructor = SsalCommodsRef::new(false);
-            let contract_account_id = client
-                .instantiate("SsalCommods", &ink_e2e::bob(), constructor, 0, None)
+            let bob_account = ink_e2e::account_id(ink_e2e::AccountKeyring::Bob);
+            let transfer_to_bob = 500_000_000u128;
+            let transfer = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.transfer(bob_account.clone(), transfer_to_bob));
+            let _transfer_res = client
+                .call(&ink_e2e::alice(), transfer, 0, None)
                 .await
-                .expect("instantiate failed")
-                .account_id;
+                .expect("transfer failed");
 
-            let get = build_message::<SsalCommodsRef>(contract_account_id.clone())
-                .call(|SsalCommods| SsalCommods.get());
-            let get_result = client.call_dry_run(&ink_e2e::bob(), &get, 0, None).await;
-            assert!(matches!(get_result.return_value(), false));
+            let balance_of = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.balance_of(bob_account));
+            let balance_of_res = client
+                .call_dry_run(&ink_e2e::alice(), &balance_of, 0, None)
+                .await;
 
-            // When
-            let flip = build_message::<SsalCommodsRef>(contract_account_id.clone())
-                .call(|SsalCommods| SsalCommods.flip());
-            let _flip_result = client
-                .call(&ink_e2e::bob(), flip, 0, None)
+            let create_contract = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.create_contract(10_000, 1_000_000, 100, 3));
+            let _create_contract_res = client
+                .call(&ink_e2e::alice(), create_contract, 0, None)
                 .await
-                .expect("flip failed");
+                .expect("create contract failed");
 
-            // Then
-            let get = build_message::<SsalCommodsRef>(contract_account_id.clone())
-                .call(|SsalCommods| SsalCommods.get());
-            let get_result = client.call_dry_run(&ink_e2e::bob(), &get, 0, None).await;
-            assert!(matches!(get_result.return_value(), true));
+            let contract_count = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.get_contract_count());
+            let contract_count_res = client
+                .call_dry_run(&ink_e2e::alice(), &contract_count, 0, None)
+                .await; 
+
+            let buy_contract = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.buy_contract(0));
+            let _buy_contract_res = client
+                .call(&ink_e2e::bob(), buy_contract, 0, None)
+                .await
+                .expect("buy contract failed");
+
+            let contract_buyer =  build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.get_buyer(0));
+            let contract_buyer_res = client
+                .call_dry_run(&ink_e2e::alice(), &contract_buyer, 0, None)
+                .await; 
+
+            let contract_balance_after_buy = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.balance_of(contract_acc_id));
+            let contract_balance_after_buy_res = client
+                .call_dry_run(&ink_e2e::bob(), &contract_balance_after_buy, 0, None)
+                .await;
+
+            let alice_account = ink_e2e::account_id(ink_e2e::AccountKeyring::Alice);
+            let seller_balance_after_buy = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.balance_of(alice_account));
+            let seller_balance_after_buy_res = client
+                .call_dry_run(&ink_e2e::bob(), &seller_balance_after_buy, 0, None)
+                .await;
+
+
+            assert_eq!(contract_balance_after_buy_res.return_value(), 1_000_000);
+            assert_eq!(seller_balance_after_buy_res.return_value(), 500_010_000);
+
+
+            let finalize_not_buyer = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.finalize(0));
+            let finalize_not_buyer_res = client
+                .call(&ink_e2e::alice(), finalize_not_buyer, 0, None)
+                .await;
+
+            assert!(
+                finalize_not_buyer_res.is_err(),
+                "accounts other than buyer should not be able to finalize the contract"
+            );
+
+            let finalize = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.finalize(0));
+            let _finalize_res = client
+                .call(&ink_e2e::bob(), finalize, 0, None)
+                .await
+                .expect("finalize contract failed");
+
+            let finalized = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.is_finalized(0));
+            let finalized_res = client
+                .call_dry_run(&ink_e2e::bob(), &finalized, 0, None)
+                .await;
+
+            let seller_balance_after_finalize = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.balance_of(alice_account));
+            let seller_balance_after_finalize_res = client
+                .call_dry_run(&ink_e2e::bob(), &seller_balance_after_finalize, 0, None)
+                .await;
+
+            let contract_balance_after_finalize = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.balance_of(contract_acc_id));
+            let contract_balance_after_finalize_res = client
+                .call_dry_run(&ink_e2e::bob(), &contract_balance_after_finalize, 0, None)
+                .await;
+
+            assert_eq!(finalized_res.return_value().unwrap(), true);
+            assert_eq!(seller_balance_after_finalize_res.return_value(), 501_010_000);
+            assert_eq!(contract_balance_after_finalize_res.return_value(), 0);
+
+            // then
+            assert_eq!(
+                total_supply,
+                total_supply_res.return_value(),
+                "total_supply"
+            );
+            assert_eq!(transfer_to_bob, balance_of_res.return_value(), "balance_of");
+            assert_eq!(contract_count_res.return_value(), 1);
+            assert_eq!(contract_buyer_res.return_value().unwrap(), bob_account);
+            
+            
+
 
             Ok(())
         }
