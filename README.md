@@ -1,7 +1,7 @@
 # Ssal Commods
-This repository contains a decentralized [futures contract]('https://www.investopedia.com/terms/f/futurescontract.asp') implementation built with [Ink!]('https://github.com/paritytech/ink') smart contracts.
+This repository contains a decentralized [futures contract](https://www.investopedia.com/terms/f/futurescontract.asp) implementation built with [Ink!](https://github.com/paritytech/ink) smart contracts.
 
-Before toying with this code I would encourage you to to first go through the [getting started]('https://use.ink/getting-started/setup') section of Ink's website.
+Before toying with this code I would encourage you to to first go through the [getting started](https://use.ink/getting-started/setup) section of Ink's website.
 
 ## Preparation
 
@@ -24,14 +24,14 @@ The `.contract` file combines the Wasm and metadata into one file and can be use
 
 ## Deploying and Calling the Contract 
 
-To play with the contract you need to first install the [substrate-contracts-node]('https://github.com/paritytech/substrate-contracts-node/releases') by following [these]('https://use.ink/getting-started/setup#installing-the-substrate-smart-contracts-node') instructions. 
+To play with the contract you need to first install the [substrate-contracts-node](https://github.com/paritytech/substrate-contracts-node/releases) by following [these](https://use.ink/getting-started/setup#installing-the-substrate-smart-contracts-node) instructions. 
 
-Next, you'll want to spin up the node running `substrate-contracts-node`. Once that's running you can access the [Contracts UI]('https://contracts-ui.substrate.io/'). Follow [these]('https://use.ink/getting-started/running-substrate') instructions.
+Next, you'll want to spin up the node running `substrate-contracts-node`. Once that's running you can access the [Contracts UI](https://contracts-ui.substrate.io/). Follow [these](https://use.ink/getting-started/running-substrate) instructions.
 
-Finally, deploy your contract to the UI by following [this link]('https://use.ink/getting-started/deploy-your-contract').
+Finally, deploy your contract to the UI by following [this link](https://use.ink/getting-started/deploy-your-contract).
 
 ## Documentation
-Note: All of the token functionality came from the [erc20 example]('https://github.com/paritytech/ink-examples/blob/main/erc20') from the ink-examples repo by paritytech. Here we'll only cover functions realted to commodity contract logic. I also wont cover all the read-only functions since they are self-explanatory.
+Note: All of the token functionality came from the [erc20 example](https://github.com/paritytech/ink-examples/blob/main/erc20) from the ink-examples repo by paritytech. Here we'll only cover functions realted to commodity contract logic. I also wont cover all the read-only functions since they are self-explanatory.
 
 ### Creating a contract.
 `create_contract` takes as input:
