@@ -600,6 +600,24 @@ mod ssal_commods {
             assert_eq!(ssal.get_price(0), Some(10));
             assert_eq!(ssal.get_total(0), Some(10_000));
             assert_eq!(ssal.get_weight(0), Some(10));
+        }
+
+        // Test possible failiures for create_contract
+        #[ink::test]
+        fn create_contract_fails() {
+            let mut ssal = SsalCommods::new(100_000);
+
+            let accounts =
+                ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+
+            // Alice owns all the tokens on contract instantiation
+            assert_eq!(ssal.balance_of(accounts.alice), 100_000);
+            // Bob does not owns tokens
+            assert_eq!(ssal.balance_of(accounts.bob), 0);
+
+            // Test correct input.
+            assert_eq!(ssal.create_contract(10, 10_000, 10, 20), Ok(()));
+            assert_eq!(ssal.get_contract_count(), 1);
 
             // Test faulty input.
             // Advance block number by 5
@@ -638,6 +656,23 @@ mod ssal_commods {
             
             // Try to buy in correct case 
             assert_eq!(ssal.buy_contract(0), Ok(()));
+        }
+
+        // Test possible failiures for buy_contract
+        #[ink::test]
+        fn buy_contract_fails() {
+            let mut ssal = SsalCommods::new(100_000);
+
+            let accounts =
+                ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+
+            assert_eq!(ssal.create_contract(10, 10_000, 10, 20), Ok(()));
+
+            // Alice transfers 10 tokens to Bob.
+            assert_eq!(ssal.transfer(accounts.bob, 10_000), Ok(()));
+            
+            // Try to buy in correct case 
+            assert_eq!(ssal.buy_contract(0), Ok(()));
             // Try to buy the contract that has just been bought
             assert_eq!(ssal.buy_contract(0), Err(Error::ContractAlreadyBought));
             // Try to buy a contract that does not exist
@@ -653,6 +688,26 @@ mod ssal_commods {
 
         #[ink::test]
         fn finalize_works() {
+            let mut ssal = SsalCommods::new(100_000);
+
+            let accounts =
+                ink::env::test::default_accounts::<ink::env::DefaultEnvironment>();
+
+            // Alice owns all the tokens on contract instantiation
+            assert_eq!(ssal.balance_of(accounts.alice), 100_000);
+
+            // Create new contract and buy
+            assert_eq!(ssal.create_contract(10, 10_000, 10, 1), Ok(()));
+            assert_eq!(ssal.buy_contract(0), Ok(()));
+
+            // Try finalizing after finality block 
+            ink::env::test::advance_block::<ink::env::DefaultEnvironment>();
+            ink::env::test::advance_block::<ink::env::DefaultEnvironment>();
+            assert_eq!(ssal.finalize(0), Ok(()));
+        }
+
+        #[ink::test]
+        fn finalize_fails() {
             let mut ssal = SsalCommods::new(100_000);
 
             let accounts =
