@@ -37,7 +37,7 @@ Note: All of the token functionality came from the [erc20 example](https://githu
 `create_contract` takes as input:
 * `_price` of type `Balance`: the price of the contract itself.
 * `_total` of type `Balance`: the total price of the product being sold.
-* `_volume` of type `Grams`: the weight, in grams, of the product being sold.
+* `_weight` of type `Grams`: the weight, in grams, of the product being sold.
 * `_finality_block` of type `BlockNumber`: the block after which the contract can be finalized. 
 
 The function then adds input data to the relevant mappings, increments the contract count, and adds the caller as the seller for the contract.
