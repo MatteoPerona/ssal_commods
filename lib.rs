@@ -19,7 +19,7 @@ mod ssal_commods {
         buyer: Option<AccountId>,
         price: Option<Balance>,
         total: Option<Balance>,
-        volume: Option<Grams>,
+        weight: Option<Grams>,
         finality_block:Option<BlockNumber>,
         finalized: Option<bool>
     }
@@ -36,8 +36,8 @@ mod ssal_commods {
         price: Mapping<ContractId, Balance>, 
         /// Amount the buyer pays on the finality date for a given contract.
         total: Mapping<ContractId, Balance>,
-        /// Volume of product being sold as specified by the contract. 
-        volume: Mapping<ContractId, Grams>, 
+        /// weight of product being sold as specified by the contract. 
+        weight: Mapping<ContractId, Grams>, 
         /// Block number at which buyer's funds are locked if the seller doesn't.
         finality_block: Mapping<ContractId, BlockNumber>,
         /// Whether or not the contract has been finalized.
@@ -83,7 +83,7 @@ mod ssal_commods {
         seller: AccountId,
         price: Balance,
         total: Balance,
-        volume: Grams,
+        weight: Grams,
         finality_block: BlockNumber,
     }
 
@@ -138,7 +138,7 @@ mod ssal_commods {
             let buyer = Mapping::default();
             let price = Mapping::default();
             let total = Mapping::default();
-            let volume = Mapping::default();
+            let weight = Mapping::default();
             let finality_block = Mapping::default();
             let finalized = Mapping::default();
             let contract_count = 0;
@@ -159,7 +159,7 @@ mod ssal_commods {
                 buyer,
                 price, 
                 total,
-                volume, 
+                weight, 
                 finality_block,
                 finalized,
                 contract_count, 
@@ -244,10 +244,10 @@ mod ssal_commods {
             self.total.get(id)
         }
 
-        /// Returns volume at the given ContractId
+        /// Returns weight at the given ContractId
         #[ink(message)]
-        pub fn get_volume(&self, id: ContractId) -> Option<Grams> {
-            self.volume.get(id)
+        pub fn get_weight(&self, id: ContractId) -> Option<Grams> {
+            self.weight.get(id)
         }
 
         /// Returns finality block at the given ContractId
@@ -278,7 +278,7 @@ mod ssal_commods {
                         buyer: self.buyer.get(id),
                         price: self.price.get(id),
                         total: self.total.get(id),
-                        volume: self.volume.get(id),
+                        weight: self.weight.get(id),
                         finality_block: self.finality_block.get(id),
                         finalized: self.finalized.get(id),
                     })
@@ -411,7 +411,7 @@ mod ssal_commods {
             &mut self,
             _price: Balance,
             _total: Balance,
-            _volume: Grams,
+            _weight: Grams,
             _finality_block: BlockNumber
         ) -> Result<(), Error> {
             // Check that finality block is valid
@@ -424,7 +424,7 @@ mod ssal_commods {
             self.seller.insert(self.contract_count, &caller);
             self.price.insert(self.contract_count, &_price);
             self.total.insert(self.contract_count, &_total);
-            self.volume.insert(self.contract_count, &_volume);
+            self.weight.insert(self.contract_count, &_weight);
             self.finality_block.insert(self.contract_count, &_finality_block);
             self.finalized.insert(self.contract_count, &false);
 
@@ -435,7 +435,7 @@ mod ssal_commods {
                 seller: caller,
                 price: _price,
                 total: _total,
-                volume: _volume,
+                weight: _weight,
                 finality_block: _finality_block,
             });
 
@@ -599,7 +599,7 @@ mod ssal_commods {
             assert_eq!(ssal.get_finality_block(0), Some(20));
             assert_eq!(ssal.get_price(0), Some(10));
             assert_eq!(ssal.get_total(0), Some(10_000));
-            assert_eq!(ssal.get_volume(0), Some(10));
+            assert_eq!(ssal.get_weight(0), Some(10));
 
             // Test faulty input.
             // Advance block number by 5
