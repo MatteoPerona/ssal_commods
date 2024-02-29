@@ -745,18 +745,13 @@ mod ssal_commods {
     }
 
 
-    /// This is how you'd write end-to-end (E2E) or integration tests for ink! contracts.
-    ///
-    /// When running these you need to make sure that you:
-    /// - Compile the tests with the `e2e-tests` feature flag enabled (`--features e2e-tests`)
-    /// - Are running a Substrate node which contains `pallet-contracts` in the background
     #[cfg(all(test, feature = "e2e-tests"))]
     mod e2e_tests {
         use super::*;
         use ink_e2e::build_message;
         type E2EResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-        /// We test that we can upload and instantiate the contract using its default constructor.
+
         #[ink_e2e::test]
         async fn buy_and_finalize(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
             // given
@@ -830,19 +825,8 @@ mod ssal_commods {
                 .call_dry_run(&ink_e2e::bob(), &seller_balance_after_buy, 0, None)
                 .await;
 
-
             assert_eq!(contract_balance_after_buy_res.return_value(), 1_000_000);
             assert_eq!(seller_balance_after_buy_res.return_value(), 500_010_000);
-
-            let finalize_not_buyer = build_message::<SsalCommodsRef>(contract_acc_id.clone())
-                .call(|ssal_commods| ssal_commods.finalize(0));
-            let finalize_not_buyer_res = client
-                .call(&ink_e2e::alice(), finalize_not_buyer, 0, None)
-                .await;
-            assert!(
-                finalize_not_buyer_res.is_err(),
-                "accounts other than buyer should not be able to finalize the contract"
-            );
 
             let finalize = build_message::<SsalCommodsRef>(contract_acc_id.clone())
                 .call(|ssal_commods| ssal_commods.finalize(0));
@@ -882,6 +866,64 @@ mod ssal_commods {
             assert_eq!(transfer_to_bob, balance_of_res.return_value(), "balance_of");
             assert_eq!(contract_count_res.return_value(), 1);
             assert_eq!(contract_buyer_res.return_value().unwrap(), bob_account);
+
+            Ok(())
+        }
+
+
+        #[ink_e2e::test]
+        async fn finalize_fail_cases(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
+            // given
+            let total_supply = 1_000_000_000;
+            let constructor = SsalCommodsRef::new(total_supply);
+            let contract_acc_id = client
+                .instantiate("ssal_commods", &ink_e2e::alice(), constructor, 0, None)
+                .await
+                .expect("instantiate failed")
+                .account_id;
+
+            // when
+            let _total_supply_msg = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.total_supply());
+
+            let bob_account = ink_e2e::account_id(ink_e2e::AccountKeyring::Bob);
+            let transfer_to_bob = 500_000_000u128;
+            let transfer = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.transfer(bob_account.clone(), transfer_to_bob));
+            let _transfer_res = client
+                .call(&ink_e2e::alice(), transfer, 0, None)
+                .await
+                .expect("transfer failed");
+
+            let create_contract = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.create_contract(10_000, 1_000_000, 100, 3));
+            let _create_contract_res = client
+                .call(&ink_e2e::alice(), create_contract, 0, None)
+                .await
+                .expect("create contract failed");
+
+            let _contract_count = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.get_contract_count());
+
+            let buy_contract = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.buy_contract(0));
+            let _buy_contract_res = client
+                .call(&ink_e2e::bob(), buy_contract, 0, None)
+                .await
+                .expect("buy contract failed");
+
+            let _contract_buyer =  build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.get_buyer(0));
+
+            let finalize_not_buyer = build_message::<SsalCommodsRef>(contract_acc_id.clone())
+                .call(|ssal_commods| ssal_commods.finalize(0));
+            let finalize_not_buyer_res = client
+                .call(&ink_e2e::alice(), finalize_not_buyer, 0, None)
+                .await;
+            assert!(
+                finalize_not_buyer_res.is_err(),
+                "accounts other than buyer should not be able to finalize the contract"
+            );
 
             Ok(())
         }
