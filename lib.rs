@@ -834,13 +834,11 @@ mod ssal_commods {
             assert_eq!(contract_balance_after_buy_res.return_value(), 1_000_000);
             assert_eq!(seller_balance_after_buy_res.return_value(), 500_010_000);
 
-
             let finalize_not_buyer = build_message::<SsalCommodsRef>(contract_acc_id.clone())
                 .call(|ssal_commods| ssal_commods.finalize(0));
             let finalize_not_buyer_res = client
                 .call(&ink_e2e::alice(), finalize_not_buyer, 0, None)
                 .await;
-
             assert!(
                 finalize_not_buyer_res.is_err(),
                 "accounts other than buyer should not be able to finalize the contract"
@@ -884,9 +882,6 @@ mod ssal_commods {
             assert_eq!(transfer_to_bob, balance_of_res.return_value(), "balance_of");
             assert_eq!(contract_count_res.return_value(), 1);
             assert_eq!(contract_buyer_res.return_value().unwrap(), bob_account);
-            
-            
-
 
             Ok(())
         }
